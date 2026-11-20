@@ -1,32 +1,25 @@
 <?php
-// Database connection settings
-// Edit these if your MySQL setup is different (e.g. you set a root password)
 
-$host = "localhost";
-$db_name = "users";
-$db_user = "root";
-$db_pass = ""; // default XAMPP MySQL root password is empty; set yours here if configured
+$host = getenv("DB_HOST");
+$user = getenv("DB_USER");
+$password = getenv("DB_PASSWORD");
+$database = getenv("DB_NAME");
+$port = (int) getenv("DB_PORT");
+$ca = getenv("DB_SSL_CA");
 
-$conn = new mysqli($host, $db_user, $db_pass, $db_name);
+$conn = mysqli_init();
 
-if ($conn->connect_error) {
-    http_response_code(500);
-    die(json_encode(["error" => "Database connection failed: " . $conn->connect_error]));
-}
+$conn->ssl_set(NULL, NULL, $ca, NULL, NULL);
 
-// Same-origin deployment is recommended. Never combine wildcard CORS with session cookies.
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowedOrigins = array_filter(array_map('trim', explode(',', getenv('AUTOCARE_ALLOWED_ORIGINS') ?: '')));
-if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
-    header('Access-Control-Allow-Origin: ' . $origin);
-    header('Access-Control-Allow-Credentials: true');
-    header('Vary: Origin');
-}
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token");
-header("Content-Type: application/json; charset=utf-8");
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
+if (!$conn->real_connect(
+    $host,
+    $user,
+    $password,
+    $database,
+    $port,
+    NULL,
+    MYSQLI_CLIENT_SSL
+)) {
+    die("Database connection failed: " . mysqli_connect_error());
 }
 ?>
