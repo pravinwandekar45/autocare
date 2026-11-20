@@ -1,6 +1,8 @@
 
 <?php
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 $host = getenv("DB_HOST");
 $user = getenv("DB_USER");
 $password = getenv("DB_PASSWORD");
@@ -8,8 +10,12 @@ $database = getenv("DB_NAME");
 $port = (int) getenv("DB_PORT");
 $ca = getenv("DB_SSL_CA");
 
-if (!$host || !$user || !$password || !$database || !$port) {
+if (!$host || !$user || !$password || !$database || !$port || !$ca) {
     die("Database configuration environment variables are missing.");
+}
+
+if (!file_exists($ca) || !is_readable($ca)) {
+    die("SSL certificate missing or not readable: " . $ca);
 }
 
 $conn = mysqli_init();
@@ -18,23 +24,20 @@ if (!$conn) {
     die("MySQL initialization failed.");
 }
 
-// Enable SSL if CA certificate is configured
-if (!empty($ca)) {
-
-    if (!file_exists($ca)) {
-        die("SSL certificate file not found: " . $ca);
-    }
-
-    $conn->ssl_set(NULL, NULL, $ca, NULL, NULL);
-
-    $ssl = MYSQLI_CLIENT_SSL;
-
-} else {
-    die("DB_SSL_CA environment variable is missing.");
-}
-
 try {
 
+    // Verify server certificate
+    $conn->options(
+        MYSQLI_OPT_SSL_VERIFY_SERVER_CERT,
+        true
+    );
+
+    // Configure SSL certificate
+    if (!$conn->ssl_set(NULL, NULL, $ca, NULL, NULL)) {
+        throw new Exception("SSL configuration failed.");
+    }
+
+    // Connect to TiDB Cloud
     $conn->real_connect(
         $host,
         $user,
@@ -42,12 +45,16 @@ try {
         $database,
         $port,
         NULL,
-        $ssl
+        MYSQLI_CLIENT_SSL
     );
 
-} catch (mysqli_sql_exception $e) {
+    $conn->set_charset("utf8mb4");
 
-    die("Database connection failed: " . $e->getMessage());
+} catch (Throwable $e) {
+
+    error_log("Database connection error: " . $e->getMessage());
+
+    die("Database connection failed. Please check server configuration and logs.");
 
 }
 
